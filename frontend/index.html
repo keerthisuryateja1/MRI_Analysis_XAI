@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MRI Analysis XAI - Cardiac Analysis System</title>
+    <title>MRI Analysis Cardiac Analysis System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .drop-zone {
@@ -254,50 +254,74 @@
         function displayResults(data) {
             const analysis = data.analysis;
 
+            // Check if there's an error in the analysis
+            if (analysis.error) {
+                showError(`Analysis Error: ${analysis.error}. ${analysis.raw_response || ''}`);
+                return;
+            }
+
             // Display image
             document.getElementById('mriImage').src = `data:image/png;base64,${data.image_base64}`;
 
             // Primary diagnosis
-            document.getElementById('diagnosis').textContent = analysis.primary_diagnosis.classification;
-            document.getElementById('confidence').textContent = `${analysis.primary_diagnosis.confidence}%`;
+            if (analysis.primary_diagnosis) {
+                document.getElementById('diagnosis').textContent = analysis.primary_diagnosis.classification || 'Unknown';
+                document.getElementById('confidence').textContent = `${analysis.primary_diagnosis.confidence || 0}%`;
+            } else {
+                document.getElementById('diagnosis').textContent = 'Unable to determine';
+                document.getElementById('confidence').textContent = '0%';
+            }
 
             // Risk assessment
-            const riskLevel = analysis.risk_assessment.risk_level;
-            const riskDiv = document.getElementById('riskAssessment');
-            riskDiv.className = `p-6 rounded-lg risk-${riskLevel}`;
-            document.getElementById('riskLevel').textContent = `${riskLevel} Risk`;
-            document.getElementById('riskRationale').textContent = analysis.risk_assessment.rationale;
+            if (analysis.risk_assessment) {
+                const riskLevel = analysis.risk_assessment.risk_level || 'Unknown';
+                const riskDiv = document.getElementById('riskAssessment');
+                riskDiv.className = `p-6 rounded-lg risk-${riskLevel}`;
+                document.getElementById('riskLevel').textContent = `${riskLevel} Risk`;
+                document.getElementById('riskRationale').textContent = analysis.risk_assessment.rationale || 'No rationale provided';
+            } else {
+                document.getElementById('riskLevel').textContent = 'Unknown Risk';
+                document.getElementById('riskRationale').textContent = 'Risk assessment not available';
+            }
 
             // Affected regions
             const regionsDiv = document.getElementById('affectedRegions');
             regionsDiv.innerHTML = '';
-            analysis.affected_regions.forEach(region => {
-                const regionCard = document.createElement('div');
-                regionCard.className = `p-4 rounded-lg border-2 severity-${region.severity}`;
-                regionCard.innerHTML = `
-                    <p class="font-semibold text-lg mb-1">${region.location}</p>
-                    <p class="text-sm font-medium uppercase">${region.severity}</p>
-                `;
-                regionsDiv.appendChild(regionCard);
-            });
+            if (analysis.affected_regions && analysis.affected_regions.length > 0) {
+                analysis.affected_regions.forEach(region => {
+                    const regionCard = document.createElement('div');
+                    regionCard.className = `p-4 rounded-lg border-2 severity-${region.severity || 'mild'}`;
+                    regionCard.innerHTML = `
+                        <p class="font-semibold text-lg mb-1">${region.location || 'Unknown region'}</p>
+                        <p class="text-sm font-medium uppercase">${region.severity || 'Unknown'}</p>
+                    `;
+                    regionsDiv.appendChild(regionCard);
+                });
+            } else {
+                regionsDiv.innerHTML = '<p class="text-gray-500">No specific regions identified</p>';
+            }
 
             // Clinical findings
             const findingsUl = document.getElementById('clinicalFindings');
             findingsUl.innerHTML = '';
-            analysis.clinical_findings.forEach(finding => {
-                const li = document.createElement('li');
-                li.className = 'flex items-start';
-                li.innerHTML = `
-                    <svg class="h-6 w-6 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <span class="text-gray-700">${finding}</span>
-                `;
-                findingsUl.appendChild(li);
-            });
+            if (analysis.clinical_findings && analysis.clinical_findings.length > 0) {
+                analysis.clinical_findings.forEach(finding => {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-start';
+                    li.innerHTML = `
+                        <svg class="h-6 w-6 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span class="text-gray-700">${finding}</span>
+                    `;
+                    findingsUl.appendChild(li);
+                });
+            } else {
+                findingsUl.innerHTML = '<li class="text-gray-500">No clinical findings reported</li>';
+            }
 
             // Explanation
-            document.getElementById('explanation').textContent = analysis.explanation;
+            document.getElementById('explanation').textContent = analysis.explanation || 'No explanation provided';
 
             // Show results
             results.classList.remove('hidden');
@@ -309,6 +333,23 @@
         function showError(message) {
             document.getElementById('errorMessage').textContent = message;
             error.classList.remove('hidden');
+            
+            // If it's a rate limit error, add helpful info
+            if (message.includes('429') || message.includes('rate limit') || message.includes('quota')) {
+                const errorDiv = document.getElementById('error');
+                const helpText = document.createElement('div');
+                helpText.className = 'mt-4 p-4 bg-yellow-50 rounded border border-yellow-200';
+                helpText.innerHTML = `
+                    <p class="font-semibold text-yellow-800 mb-2">⏱️ Rate Limit Info:</p>
+                    <ul class="text-sm text-yellow-700 space-y-1 list-disc list-inside">
+                        <li>Free tier: 15 requests per minute</li>
+                        <li>Wait 60 seconds before trying again</li>
+                        <li>Check usage: <a href="https://ai.dev/usage?tab=rate-limit" target="_blank" class="underline">AI Studio Usage</a></li>
+                        <li>Get more quota: <a href="https://ai.google.dev/pricing" target="_blank" class="underline">Upgrade Plan</a></li>
+                    </ul>
+                `;
+                errorDiv.appendChild(helpText);
+            }
         }
 
         function hideError() {
