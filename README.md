@@ -5,6 +5,11 @@
 This system uses Google's Gemini 2.5 Flash API to analyze cardiac MRI scans and provide detailed, explainable diagnoses with confidence scores, affected regions, clinical findings, and risk assessments.
 
 ---
+Demo Video:
+
+
+https://github.com/user-attachments/assets/4f727bf5-b3ac-413f-b371-c2d08cfd646c
+
 
 ## 🚀 Features
 
