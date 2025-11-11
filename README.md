@@ -2,13 +2,13 @@
 
 **Explainable AI-Based Cardiac MRI Analysis System for Detecting Myocardial Infarction and Structural Deformities**
 
-This system uses Google's Gemini 2.0 Flash API to analyze cardiac MRI scans and provide detailed, explainable diagnoses with confidence scores, affected regions, clinical findings, and risk assessments.
+This system uses Google's Gemini 2.5 Flash API to analyze cardiac MRI scans and provide detailed, explainable diagnoses with confidence scores, affected regions, clinical findings, and risk assessments.
 
 ---
 
 ## 🚀 Features
 
-- **AI-Powered Analysis**: Leverages Gemini 2.0 Flash for advanced cardiac MRI interpretation
+- **AI-Powered Analysis**: Leverages Gemini 2.5 Flash for advanced cardiac MRI interpretation
 - **Explainable AI**: Provides detailed reasoning and clinical explanations for every diagnosis
 - **Visual Interface**: Clean, intuitive web interface with drag-and-drop upload
 - **Comprehensive Reports**: Includes diagnosis, confidence scores, affected regions, clinical findings, and risk assessment
