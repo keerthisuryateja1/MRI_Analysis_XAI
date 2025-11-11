@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import json
 from PIL import Image
+import time
 
 load_dotenv()
 
@@ -14,7 +15,10 @@ class GeminiMRIAnalyzer:
             raise ValueError("GEMINI_API_KEY not found in environment variables")
         
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Use gemini-2.5-flash - latest stable model with excellent vision capabilities
+        self.model = genai.GenerativeModel('models/gemini-2.5-flash')
+        self.last_request_time = 0
+        self.min_request_interval = 3  # Minimum 3 seconds between requests
         
     def create_prompt(self):
         """Create structured prompt for MRI analysis"""
@@ -83,13 +87,24 @@ Be precise, clinical, and evidence-based in your analysis."""
             dict: Analysis results
         """
         try:
+            # Rate limiting: ensure minimum interval between requests
+            current_time = time.time()
+            time_since_last_request = current_time - self.last_request_time
+            if time_since_last_request < self.min_request_interval:
+                wait_time = self.min_request_interval - time_since_last_request
+                print(f"Rate limiting: waiting {wait_time:.1f} seconds...")
+                time.sleep(wait_time)
+            
             prompt = self.create_prompt()
             
             # Generate response
+            print("Sending request to Gemini API...")
             response = self.model.generate_content([prompt, image])
+            self.last_request_time = time.time()
             
-            # Parse JSON response
+            # Get response text
             response_text = response.text.strip()
+            print(f"Raw Gemini response:\n{response_text}\n")  # Debug output
             
             # Remove markdown code blocks if present
             if response_text.startswith("```json"):
@@ -104,19 +119,86 @@ Be precise, clinical, and evidence-based in your analysis."""
             # Parse JSON
             analysis = json.loads(response_text)
             
+            # Validate required fields
+            if "primary_diagnosis" not in analysis:
+                analysis["primary_diagnosis"] = {
+                    "classification": "Inconclusive",
+                    "confidence": 0
+                }
+            
+            if "affected_regions" not in analysis:
+                analysis["affected_regions"] = []
+            
+            if "clinical_findings" not in analysis:
+                analysis["clinical_findings"] = ["Unable to determine clinical findings"]
+            
+            if "explanation" not in analysis:
+                analysis["explanation"] = "Analysis completed but detailed explanation not available."
+            
+            if "risk_assessment" not in analysis:
+                analysis["risk_assessment"] = {
+                    "risk_level": "Unknown",
+                    "rationale": "Risk assessment not available"
+                }
+            
             return analysis
             
-        except json.JSONDecodeError as e:
-            # If JSON parsing fails, return raw response with error
-            return {
-                "error": "Failed to parse JSON response",
-                "raw_response": response.text,
-                "parse_error": str(e)
-            }
         except Exception as e:
+            error_msg = str(e)
+            print(f"Error during analysis: {error_msg}")
+            
+            # Check for rate limit error
+            if "429" in error_msg or "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+                return {
+                    "error": "Rate limit exceeded",
+                    "details": "You've hit the Gemini API rate limit. Please wait 60 seconds and try again.",
+                    "suggestion": "The free tier allows 15 requests per minute. Wait a moment before trying again.",
+                    "primary_diagnosis": {
+                        "classification": "Rate Limit",
+                        "confidence": 0
+                    },
+                    "affected_regions": [],
+                    "clinical_findings": ["Rate limit exceeded - please wait"],
+                    "explanation": "API rate limit reached. Free tier: 15 requests/min. Please wait 60 seconds.",
+                    "risk_assessment": {
+                        "risk_level": "Unknown",
+                        "rationale": "Cannot assess due to rate limiting"
+                    }
+                }
+            
+            # Check for JSON parsing error
+            if "json" in error_msg.lower():
+                return {
+                    "error": "Failed to parse AI response",
+                    "details": f"JSON parsing failed: {error_msg}",
+                    "primary_diagnosis": {
+                        "classification": "Parsing Error",
+                        "confidence": 0
+                    },
+                    "affected_regions": [],
+                    "clinical_findings": ["Response parsing failed"],
+                    "explanation": f"The AI response could not be parsed as JSON: {error_msg}",
+                    "risk_assessment": {
+                        "risk_level": "Unknown",
+                        "rationale": "Cannot assess due to parsing error"
+                    }
+                }
+            
+            # General error
             return {
                 "error": str(e),
-                "details": "Failed to analyze MRI image"
+                "details": "Failed to analyze MRI image",
+                "primary_diagnosis": {
+                    "classification": "Error",
+                    "confidence": 0
+                },
+                "affected_regions": [],
+                "clinical_findings": ["Analysis failed"],
+                "explanation": f"An error occurred during analysis: {str(e)}",
+                "risk_assessment": {
+                    "risk_level": "Unknown",
+                    "rationale": "Could not assess risk due to error"
+                }
             }
     
     def analyze_with_history(self, image: Image.Image, patient_history: str = None):
